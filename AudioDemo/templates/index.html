@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Audio Analytics | So Sánh Mô Hình</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4361ee;
+            --secondary: #3f37c9;
+            --success: #4cc9f0;
+            --bg: #f8f9fd;
+        }
+
+        body { 
+            font-family: 'Inter', system-ui, -apple-system, sans-serif; 
+            background: var(--bg); 
+            display: flex; justify-content: center; align-items: center; 
+            min-height: 100vh; margin: 0; color: #2b2d42;
+        }
+
+        .container { 
+            background: white; padding: 40px; border-radius: 24px; 
+            box-shadow: 0 20px 50px rgba(0,0,0,0.05); 
+            width: 100%; max-width: 800px; text-align: center; 
+        }
+
+        h2 { margin-bottom: 8px; color: #1a1c2e; font-size: 28px; }
+        .subtitle { color: #8d99ae; margin-bottom: 32px; font-size: 15px; }
+
+        /* Area Upload */
+        .upload-card {
+            border: 2px dashed #d1d5db;
+            padding: 40px 20px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #fff;
+            margin-bottom: 30px;
+        }
+        .upload-card:hover { border-color: var(--primary); background: #f0f3ff; transform: translateY(-2px); }
+        .upload-card i { font-size: 48px; color: var(--primary); margin-bottom: 16px; }
+
+        /* Results Grid */
+        .results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; display: none; }
+        
+        .res-box {
+            padding: 24px; border-radius: 16px; text-align: left;
+            position: relative; overflow: hidden;
+            border: 1px solid #edf2f7; background: #fff;
+            transition: transform 0.3s;
+        }
+        .res-box:hover { transform: scale(1.02); }
+        .res-box.winner { border: 2px solid var(--success); background: #f0faff; }
+
+        .model-tag { 
+            font-size: 11px; font-weight: 800; text-transform: uppercase; 
+            letter-spacing: 1px; color: var(--primary); margin-bottom: 12px; display: block;
+        }
+        .audio-label { font-size: 22px; font-weight: 700; color: #1a1c2e; margin-bottom: 16px; display: block; }
+
+        /* Confidence Bar */
+        .conf-container { width: 100%; height: 8px; background: #edf2f7; border-radius: 4px; margin-bottom: 8px; }
+        .conf-bar { height: 100%; background: var(--primary); border-radius: 4px; transition: width 1s ease-out; }
+        .conf-text { font-size: 13px; font-weight: 600; color: #4a5568; }
+
+        /* Loading */
+        #loading { display: none; margin: 20px 0; }
+        .spinner {
+            width: 40px; height: 40px; border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary); border-radius: 50%;
+            animation: spin 1s linear infinite; margin: 0 auto 10px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Phân Tích Âm Thanh AI</h2>
+        <p class="subtitle">Hệ thống so sánh độ chính xác giữa mô hình AST và ResNet-Hybrid</p>
+        
+        <input type="file" id="audioInput" hidden accept=".wav">
+        <div class="upload-card" onclick="document.getElementById('audioInput').click()">
+            <i class="fas fa-cloud-upload-alt"></i>
+            <p id="fileName">Kéo thả hoặc nhấn để chọn file âm thanh (.wav)</p>
+        </div>
+
+        <div id="loading">
+            <div class="spinner"></div>
+            <p style="color: var(--primary); font-weight: 600;">🤖 Đang phân tích sóng âm...</p>
+        </div>
+
+        <div class="results-grid" id="resGroup">
+            <div class="res-box winner">
+                <span class="model-tag">Mô hình AST (SOTA)</span>
+                <span class="audio-label" id="ast-label">Chờ xử lý...</span>
+                <div class="conf-container">
+                    <div class="conf-bar" id="ast-bar" style="width: 0%"></div>
+                </div>
+                <div class="conf-text">Độ tin cậy: <span id="ast-conf">0</span>%</div>
+            </div>
+
+            <div class="res-box">
+                <span class="model-tag">ResNet + Transformer</span>
+                <span class="audio-label" id="hybrid-label">Chờ xử lý...</span>
+                <div class="conf-container">
+                    <div class="conf-bar" id="hybrid-bar" style="width: 0%; background: #94a3b8;"></div>
+                </div>
+                <div class="conf-text">Độ tin cậy: <span id="hybrid-conf">0</span>%</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const input = document.getElementById('audioInput');
+        
+        input.onchange = async () => {
+            const file = input.files[0];
+            if (!file) return;
+            
+            // Hiển thị tên file
+            document.getElementById('fileName').innerText = "Đang xử lý: " + file.name;
+            
+            // UI Loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('resGroup').style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/predict', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if(data.error) { alert(data.error); return; }
+
+                // UI Hiển thị kết quả
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('resGroup').style.display = 'grid';
+
+                // Cập nhật AST
+                document.getElementById('ast-label').innerText = data.model_ast.label;
+                document.getElementById('ast-conf').innerText = data.model_ast.conf;
+                document.getElementById('ast-bar').style.width = data.model_ast.conf + "%";
+
+                // Cập nhật Hybrid
+                document.getElementById('hybrid-label').innerText = data.model_hybrid.label;
+                document.getElementById('hybrid-conf').innerText = data.model_hybrid.conf;
+                document.getElementById('hybrid-bar').style.width = data.model_hybrid.conf + "%";
+
+            } catch (err) {
+                console.error(err);
+                alert("Lỗi kết nối Server!");
+            }
+        };
+    </script>
+</body>
+</html>
